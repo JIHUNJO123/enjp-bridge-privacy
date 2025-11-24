@@ -1,6 +1,6 @@
-# 한일 채팅 앱 (Korea-Japan Chat App)
+# ENJP Bridge - English-Japanese Chat App
 
-한국어와 일본어 사용자를 위한 실시간 번역 채팅 애플리케이션입니다.
+Real-time chat application connecting English and Japanese speakers with automatic translation.
 
 ## 📱 주요 기능
 
