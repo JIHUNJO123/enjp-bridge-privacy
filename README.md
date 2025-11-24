@@ -4,11 +4,10 @@ Real-time chat application connecting English and Japanese speakers with automat
 
 ## 📱 주요 기능
 
-- ✅ 한국어/일본어 사용자 인증 및 회원가입
-- ✅ 디바이스 기반 계정 제한
+- ✅ 영어/일본어 사용자 인증 및 회원가입
 - ✅ 이메일/닉네임 중복 체크
 - ✅ 실시간 1:1 채팅
-- ✅ 자동 메시지 번역 (한일 양방향)
+- ✅ 자동 메시지 번역
 - ✅ 채팅 요청/수락 시스템
 - ✅ 푸시 알림 (새 메시지, 채팅 요청)
 - ✅ 사용자 목록 및 검색
@@ -144,8 +143,8 @@ korea-japan-chat/
 ## 🔧 주요 기능 설명
 
 ### 1. 회원가입 및 로그인
-- 이메일/비밀번호 기반 인증
-- 언어 선택 (한국어/일본어)
+-아이디/비밀번호 설정정
+- 언어 선택 (영어/일본어)
 - 닉네임 설정
 
 ### 2. 채팅 기능
@@ -155,7 +154,6 @@ korea-japan-chat/
 
 ### 3. 사용자 관리
 - 다른 언어 사용자 목록 표시
-- 사용자 검색
 - 채팅방 자동 생성
 
 ## 🌐 번역 API 변경
@@ -222,4 +220,4 @@ MIT License
 
 ---
 
-Made with ❤️ for Korea-Japan friendship
+Made with ❤️ for English-Japan friendship
