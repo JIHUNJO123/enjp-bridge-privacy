@@ -2,7 +2,7 @@
   "expo": {
     "name": "ENJP Bridge",
     "slug": "korea-japan-chat",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,8 +14,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.enjpbridge.app",
+      "buildNumber": "11",
       "config": {
         "googleMobileAdsAppId": "ca-app-pub-5837885590326347~8604054372"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -24,6 +28,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.enjpbridge.app",
+      "versionCode": 12,
       "edgeToEdgeEnabled": true,
       "config": {
         "googleMobileAdsAppId": "ca-app-pub-5837885590326347~9917136043"
@@ -43,7 +48,8 @@
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-5837885590326347~9917136043",
-          "iosAppId": "ca-app-pub-5837885590326347~8604054372"
+          "iosAppId": "ca-app-pub-5837885590326347~8604054372",
+          "delayAppMeasurementInit": false
         }
       ]
     ]

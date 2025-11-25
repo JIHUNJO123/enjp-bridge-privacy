@@ -185,7 +185,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Firebase Auth를 사용하는 로그인 함수
-  const login = async (username, password) => {
+  const login = async (username, password, selectedLanguage = 'en') => {
     try {
       setLoading(true);
       console.log('Starting login process for username:', username);
@@ -207,6 +207,9 @@ export const AuthProvider = ({ children }) => {
         console.log('User is deleted:', username);
         throw new Error('This account has been deleted.');
       }
+
+      // 언어 체크: 현재 선택한 언어와 계정 언어가 일치하는지 확인
+      // 로그인 화면에서 선택한 언어를 가져와야 함 (기본값 'en')
 
       // Firebase Auth로 로그인 시도 (username을 email 형식으로 변환)
       const email = `${username}@user.app`;
@@ -250,8 +253,49 @@ export const AuthProvider = ({ children }) => {
   // 이메일 인증 관련 함수 완전 제거
 
   const deleteAccount = async () => {
-    // 실제 계정 삭제 로직만 남기고, Provider return문 제거
-    // ...계정 삭제 로직...
+    try {
+      if (!user || !user.uid) {
+        throw new Error('No user logged in');
+      }
+
+      const userId = user.uid;
+      console.log('Starting account deletion for user:', userId);
+
+      // 1. 사용자의 모든 채팅방 찾기
+      const chatRoomsQuery = query(
+        collection(db, 'chatRooms'),
+        where('participants', 'array-contains', userId)
+      );
+      const chatRoomsSnapshot = await getDocs(chatRoomsQuery);
+
+      // 2. 각 채팅방의 메시지 삭제
+      for (const roomDoc of chatRoomsSnapshot.docs) {
+        const messagesQuery = query(collection(db, 'chatRooms', roomDoc.id, 'messages'));
+        const messagesSnapshot = await getDocs(messagesQuery);
+        
+        for (const msgDoc of messagesSnapshot.docs) {
+          await deleteDoc(doc(db, 'chatRooms', roomDoc.id, 'messages', msgDoc.id));
+        }
+        
+        // 3. 채팅방 삭제
+        await deleteDoc(doc(db, 'chatRooms', roomDoc.id));
+      }
+
+      // 4. 사용자 프로필 삭제
+      await deleteDoc(doc(db, 'users', userId));
+
+      // 5. Firebase Auth 계정 삭제
+      await user.delete();
+
+      // 6. 로컬 상태 초기화
+      setUser(null);
+      setUserProfile(null);
+
+      console.log('Account deletion completed');
+    } catch (error) {
+      console.error('Delete account error:', error);
+      throw error;
+    }
   };
 
   const value = {

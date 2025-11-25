@@ -4,13 +4,18 @@ import { collection, query, where, onSnapshot, getDoc, updateDoc, serverTimestam
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import AdMobBannerComponent from '../components/AdMobBanner';
+import { showInterstitial } from '../components/AdMobInterstitial';
 
 export default function ChatListScreen({ navigation }) {
   const [chatRooms, setChatRooms] = useState([]);
+  const [chatClickCount, setChatClickCount] = useState(0);
   const { user, userProfile, logout, deleteAccount } = useAuth();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !user.uid) {
+      setChatRooms([]);
+      return;
+    }
 
     console.log('Setting up ChatList listener for user:', user.uid);
 
@@ -107,6 +112,7 @@ export default function ChatListScreen({ navigation }) {
             style: 'destructive',
             onPress: async () => {
               try {
+                await showInterstitial();
                 await logout();
               } catch (error) {
                 Alert.alert(
@@ -122,13 +128,16 @@ export default function ChatListScreen({ navigation }) {
   };
 
   const handleDeleteAccount = async () => {
+    console.log('handleDeleteAccount called');
     const isEnglish = (userProfile?.language || 'en') === 'en';
     
     // 웹에서는 window.confirm 사용
     if (typeof window !== 'undefined' && window.confirm) {
+      console.log('Using window.confirm for web');
       const confirmMessage = `⚠️ ${isEnglish ? 'Account Deletion Warning' : '会員退会警告'}\n\n${isEnglish ? 'All data will be permanently deleted:\n- Chat history\n- User information\n- All messages\n\nAre you sure you want to delete your account?' : '会員退会時、すべてのデータが永久に削除されます。\n- チャット履歴\n- ユーザー情報\n- すべてのメッセージ\n\n本当に退会しますか？'}`;
       if (window.confirm(confirmMessage)) {
         try {
+          console.log('Calling deleteAccount...');
           await deleteAccount();
           window.alert(`✅ ${isEnglish ? 'Account Deleted' : '退会完了'}\n\n${isEnglish ? 'Your account has been deleted.' : '会員退会が完了しました。'}`);
         } catch (error) {
@@ -138,26 +147,29 @@ export default function ChatListScreen({ navigation }) {
       }
     } else {
       // 모바일에서는 Alert 사용
+      console.log('Using Alert for mobile');
       Alert.alert(
         isEnglish ? 'Delete Account' : '会員退会',
         isEnglish
           ? 'All data will be permanently deleted:\n- Chat history\n- User information\n- All messages\n\nAre you sure you want to delete your account?'
           : '会員退会時、すべてのデータが永久に削除されます。\n- チャット履歴\n- ユーザー情報\n- すべてのメッセージ\n\n本当に退会しますか？',
         [
-          { text: isKorean ? '취소' : 'キャンセル', style: 'cancel' },
+          { text: isEnglish ? 'Cancel' : 'キャンセル', style: 'cancel' },
           {
-            text: isKorean ? '탈퇴' : '退会',
+            text: isEnglish ? 'Delete' : '退会',
             style: 'destructive',
             onPress: async () => {
               try {
+                console.log('Calling deleteAccount...');
                 await deleteAccount();
                 Alert.alert(
-                  isKorean ? '탈퇴 완료' : '退会完了',
-                  isKorean ? '회원탈퇴가 완료되었습니다.' : '会員退会が完了しました。'
+                  isEnglish ? 'Account Deleted' : '退会完了',
+                  isEnglish ? 'Your account has been deleted.' : '会員退会が完了しました。'
                 );
               } catch (error) {
+                console.error('Delete account error:', error);
                 Alert.alert(
-                  isKorean ? '오류' : 'エラー',
+                  isEnglish ? 'Error' : 'エラー',
                   error.message
                 );
               }
@@ -176,6 +188,10 @@ export default function ChatListScreen({ navigation }) {
         acceptedAt: serverTimestamp(),
       });
       console.log('Chat request accepted');
+      
+      // 전면 광고 표시
+      await showInterstitial();
+      
       const isEnglish = (userProfile?.language || 'en') === 'en';
       if (typeof window !== 'undefined' && window.alert) {
         window.alert(`✅ ${isEnglish ? 'Request Accepted' : '承認完了'}\n\n${isEnglish ? 'Chat room is now active!\nYou can start chatting now.' : 'チャットルームが有効になりました！\n会話を始められます。'}`);
@@ -222,7 +238,9 @@ export default function ChatListScreen({ navigation }) {
   };
 
   const renderChatRoom = ({ item }) => {
-    const languageFlag = item.otherUser?.language === 'en' ? '🇺🇸' : '🇯🇵';
+    if (!user || !user.uid) return null;
+    
+    const languageFlag = item.otherUser?.language === 'en' ? 'EN' : '🇯🇵';
     const isEnglish = (userProfile?.language || 'en') === 'en';
     const isPending = item.status === 'pending';
     const isRequester = item.requestedBy === user.uid;
@@ -234,9 +252,17 @@ export default function ChatListScreen({ navigation }) {
       <View style={styles.chatRoomItem}>
         <TouchableOpacity
           style={styles.chatRoomContent}
-          onPress={() => {
+          onPress={async () => {
             console.log('Room clicked:', item.id, 'Status:', item.status);
             if (item.status === 'accepted') {
+              // 3번째마다 전면 광고 표시
+              const newCount = chatClickCount + 1;
+              setChatClickCount(newCount);
+              
+              if (newCount % 3 === 0) {
+                await showInterstitial();
+              }
+              
               navigation.navigate('Chat', { 
                 chatRoomId: item.id,
                 otherUser: item.otherUser,
@@ -325,7 +351,7 @@ export default function ChatListScreen({ navigation }) {
         </Text>
         <View style={styles.headerRight}>
           <Text style={styles.userInfo}>
-            {userProfile?.displayName} {(userProfile?.language || 'en') === 'en' ? '🇺🇸' : '🇯🇵'}
+            {userProfile?.displayName} {(userProfile?.language || 'en') === 'en' ? 'EN' : '🇯🇵'}
           </Text>
           <TouchableOpacity onPress={handleDeleteAccount} style={styles.deleteButton}>
             <Text style={styles.deleteText}>

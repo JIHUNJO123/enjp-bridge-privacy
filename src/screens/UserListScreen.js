@@ -29,11 +29,13 @@ export default function UserListScreen({ navigation }) {
   const { user, userProfile } = useAuth();
 
   useEffect(() => {
-    loadUsers();
+    if (user && user.uid) {
+      loadUsers();
+    }
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !user.uid) return;
 
     // 실시간 사용자 목록 업데이트
     const q = query(collection(db, 'users'));
@@ -92,6 +94,11 @@ export default function UserListScreen({ navigation }) {
   };
 
   const createChatRoom = async (otherUser) => {
+    if (!user || !user.uid) {
+      console.log('User not logged in');
+      return;
+    }
+    
     // userProfile이 로드되지 않았으면 alert 후 리턴
     if (!userProfile) {
       console.log('userProfile not loaded');
@@ -241,7 +248,7 @@ export default function UserListScreen({ navigation }) {
   };
 
   const renderUser = ({ item }) => {
-    const languageFlag = item.language === 'en' ? '🇺🇸' : '🇯🇵';
+    const languageFlag = item.language === 'en' ? 'EN' : '🇯🇵';
     
     return (
       <TouchableOpacity

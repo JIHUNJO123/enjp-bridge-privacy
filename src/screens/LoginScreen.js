@@ -25,6 +25,7 @@ export default function LoginScreen({ navigation }) {
   const [isLogin, setIsLogin] = useState(true);
   const [displayName, setDisplayName] = useState('');
   const [language, setLanguage] = useState('en');
+  const [autoCompleteDisabled, setAutoCompleteDisabled] = useState(false);
   // Google Sign-In 관련 상태 제거
   
   const { login, signup } = useAuth();
@@ -109,8 +110,9 @@ export default function LoginScreen({ navigation }) {
           }
           return;
         }
-        // 아이디와 비밀번호로 로그인
-        await login(username, password);
+        // 아이디와 비밀번호로 로그인 (선택한 언어 전달)
+        await login(username, password, language);
+        await showInterstitial(); // 로그인 성공 시 전면 광고 노출
       } else {
         // Google 회원가입 로직 제거
         {
@@ -289,8 +291,18 @@ export default function LoginScreen({ navigation }) {
             style={styles.input}
             placeholder={idPlaceholder}
             value={username}
-            onChangeText={setUsername}
+            onChangeText={(text) => {
+              // @ 기호가 포함되어 있으면 제거
+              const cleanText = text.replace(/@.*/g, '');
+              setUsername(cleanText);
+            }}
             autoCapitalize="none"
+            autoComplete="off"
+            autoCorrect={false}
+            textContentType="none"
+            keyboardType="default"
+            importantForAutofill="no"
+            spellCheck={false}
             maxLength={16}
           />
           

@@ -22,6 +22,7 @@ import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { autoTranslate } from '../services/translation';
 import { sendPushNotification } from '../services/notifications';
+import AdMobBannerComponent from '../components/AdMobBanner';
 
 export default function ChatScreen({ route, navigation }) {
   // route.params가 undefined일 수 있으므로 안전하게 처리
@@ -35,6 +36,8 @@ export default function ChatScreen({ route, navigation }) {
   const isEnglish = (userProfile?.language || 'en') === 'en';
 
   useEffect(() => {
+    if (!user || !user.uid || !chatRoomId) return;
+
     // 메시지 실시간 구독
     const messagesRef = collection(db, 'chatRooms', chatRoomId, 'messages');
     const q = query(messagesRef, orderBy('createdAt', 'asc'));
@@ -76,6 +79,7 @@ export default function ChatScreen({ route, navigation }) {
 
   const sendMessage = async () => {
     if (inputText.trim() === '') return;
+    if (!user || !user.uid) return;
 
     try {
       const messageText = inputText.trim();
@@ -97,8 +101,11 @@ export default function ChatScreen({ route, navigation }) {
         lastMessageAt: new Date().toISOString(),
       });
 
-      // 상대방에게 푸시 알림 전송
-      if (otherUser?.pushToken) {
+      // 상대방에게 푸시 알림 전송 (자기 자신에게는 보내지 않음)
+      // otherUser.id가 다르고, pushToken도 다를 때만 전송
+      if (otherUser?.pushToken && 
+          otherUser.id !== user.uid && 
+          otherUser.pushToken !== userProfile?.pushToken) {
         const isKorean = (userProfile?.language || 'ko') === 'ko';
         await sendPushNotification(
           otherUser.pushToken,
@@ -114,6 +121,8 @@ export default function ChatScreen({ route, navigation }) {
   };
 
   const renderMessage = ({ item }) => {
+    if (!user || !user.uid) return null;
+    
     const isMyMessage = item.senderId === user.uid;
     const showTranslation = !isMyMessage && translatedMessages[item.id];
 
@@ -173,13 +182,15 @@ export default function ChatScreen({ route, navigation }) {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
-      keyboardVerticalOffset={90}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={styles.backButtonText}>{isEnglish ? "← Back" : "← 戻る"}</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{otherUser?.displayName || '채팅'}</Text>
+        <Text style={styles.headerTitle}>
+          {otherUser?.displayName || '채팅'} {otherUser?.language === 'en' ? 'EN' : '🇯🇵'}
+        </Text>
         <View style={styles.headerSpacer} />
       </View>
       
@@ -209,6 +220,8 @@ export default function ChatScreen({ route, navigation }) {
           <Text style={styles.sendButtonText}>{isEnglish ? "Send" : "送信"}</Text>
         </TouchableOpacity>
       </View>
+      
+      <AdMobBannerComponent screenType="chat" />
     </KeyboardAvoidingView>
   );
 }

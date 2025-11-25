@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
+import { initializeAdMob } from './src/services/admob';
 
 export default function App() {
   const notificationListener = useRef();
@@ -12,8 +13,8 @@ export default function App() {
   useEffect(() => {
     // 웹에서는 알림 기능 비활성화
     if (Platform.OS !== 'web') {
-      // TODO: AdMob 초기화는 개발 빌드에서만 작동합니다
-      // 기본 기능 테스트 후 EAS Build로 빌드 예정
+      // AdMob 초기화
+      initializeAdMob();
 
       // 알림이 도착했을 때 (앱이 포그라운드에 있을 때)
       notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
