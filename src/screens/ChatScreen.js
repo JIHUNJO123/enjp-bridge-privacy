@@ -8,6 +8,8 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  Modal,
 } from 'react-native';
 import {
   collection,
@@ -17,6 +19,9 @@ import {
   onSnapshot,
   doc,
   updateDoc,
+  setDoc,
+  getDoc,
+  Timestamp,
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -31,12 +36,66 @@ export default function ChatScreen({ route, navigation }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [translatedMessages, setTranslatedMessages] = useState({});
+  const [showMenu, setShowMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
   const { user, userProfile } = useAuth();
   const flatListRef = useRef(null);
   const isEnglish = (userProfile?.language || 'en') === 'en';
 
   useEffect(() => {
     if (!user || !user.uid || !chatRoomId) return;
+
+    // 차단 여부 확인
+    const checkBlockStatus = async () => {
+      try {
+        // 내가 상대방을 차단했는지 확인
+        const myBlockDoc = await getDoc(doc(db, 'users', user.uid, 'blocked', otherUser.uid));
+        // 상대방이 나를 차단했는지 확인
+        const theirBlockDoc = await getDoc(doc(db, 'users', otherUser.uid, 'blocked', user.uid));
+        
+        if (myBlockDoc.exists() || theirBlockDoc.exists()) {
+          // 차단된 상태면 채팅 목록으로 돌아가기
+          navigation.goBack();
+          
+          if (typeof window !== 'undefined' && window.alert) {
+            window.alert(isEnglish 
+              ? 'This conversation is no longer available.' 
+              : 'この会話は利用できません。');
+          } else {
+            Alert.alert(
+              isEnglish ? 'Blocked' : 'ブロック済み',
+              isEnglish 
+                ? 'This conversation is no longer available.' 
+                : 'この会話は利用できません。'
+            );
+          }
+          return true;
+        }
+        return false;
+      } catch (error) {
+        console.error('Error checking block status:', error);
+        return false;
+      }
+    };
+
+    // 초기 차단 여부 확인
+    checkBlockStatus().then(isBlocked => {
+      if (isBlocked) return;
+
+      // 채팅방 진입 시 읽지 않은 메시지 카운트 초기화
+      const resetUnreadCount = async () => {
+        try {
+          const chatRoomRef = doc(db, 'chatRooms', chatRoomId);
+          await updateDoc(chatRoomRef, {
+            [`unread_${user.uid}`]: 0,
+          });
+        } catch (error) {
+          console.error('Error resetting unread count:', error);
+        }
+      };
+      resetUnreadCount();
+    });
 
     // 메시지 실시간 구독
     const messagesRef = collection(db, 'chatRooms', chatRoomId, 'messages');
@@ -83,6 +142,35 @@ export default function ChatScreen({ route, navigation }) {
 
     try {
       const messageText = inputText.trim();
+      
+      // 부적절한 콘텐츠 필터링
+      const inappropriateTerms = [
+        // English
+        'fuck', 'shit', 'bitch', 'asshole', 'damn', 'bastard', 'whore', 'slut', 
+        'rape', 'kill yourself', 'suicide', 'nigger', 'faggot', 'retard',
+        'porn', 'sex', 'nude', 'dick', 'pussy', 'cock', 'penis', 'vagina',
+        // Japanese
+        'バカ', 'アホ', 'クソ', '死ね', 'キチガイ', 'ブス', 'デブ',
+        'エロ', 'セックス', 'ちんこ', 'まんこ', 'おっぱい',
+      ];
+      
+      const lowerCaseText = messageText.toLowerCase();
+      const containsInappropriate = inappropriateTerms.some(term => 
+        lowerCaseText.includes(term.toLowerCase())
+      );
+      
+      if (containsInappropriate) {
+        const isKorean = (userProfile?.language || 'ko') === 'ko';
+        Alert.alert(
+          isKorean ? '부적절한 콘텐츠' : '不適切なコンテンツ',
+          isKorean 
+            ? '이 메시지에는 부적절한 콘텐츠가 포함되어 있어 전송할 수 없습니다.' 
+            : 'このメッセージには不適切なコンテンツが含まれているため、送信できません。'
+        );
+        setInputText('');
+        return;
+      }
+      
       setInputText('');
 
       // 메시지 저장
@@ -96,9 +184,15 @@ export default function ChatScreen({ route, navigation }) {
 
       // 채팅방 정보 업데이트
       const chatRoomRef = doc(db, 'chatRooms', chatRoomId);
+      
+      // 현재 상대방의 unread 카운트 가져오기
+      const chatRoomDoc = await getDoc(chatRoomRef);
+      const currentUnread = chatRoomDoc.data()?.[`unread_${otherUser.uid}`] || 0;
+      
       await updateDoc(chatRoomRef, {
         lastMessage: messageText,
         lastMessageAt: new Date().toISOString(),
+        [`unread_${otherUser.uid}`]: currentUnread + 1,
       });
 
       // 상대방에게 푸시 알림 전송 (자기 자신에게는 보내지 않음)
@@ -117,6 +211,156 @@ export default function ChatScreen({ route, navigation }) {
       }
     } catch (error) {
       console.error('Error sending message:', error);
+    }
+  };
+
+  const handleReport = () => {
+    setShowMenu(false);
+    setShowReportModal(true);
+  };
+
+  const submitReport = async () => {
+    if (!reportReason) {
+      if (Platform.OS === 'web') {
+        window.alert(isEnglish ? 'Please select a reason' : '理由を選択してください');
+      } else {
+        Alert.alert(
+          isEnglish ? 'Error' : 'エラー',
+          isEnglish ? 'Please select a reason' : '理由を選択してください'
+        );
+      }
+      return;
+    }
+    
+    console.log('submitReport called');
+    console.log('otherUser:', otherUser);
+    console.log('user:', user);
+    console.log('reportReason:', reportReason);
+    
+    try {
+      // 신고 기록 저장
+      const reportRef = doc(collection(db, 'reports'));
+      await setDoc(reportRef, {
+        reporterId: user.uid,
+        reporterName: userProfile.displayName,
+        reportedUserId: otherUser.uid,
+        reportedUserName: otherUser.displayName,
+        chatRoomId: chatRoomId,
+        reason: reportReason,
+        createdAt: Timestamp.now(),
+        status: 'pending',
+      });
+      
+      setShowReportModal(false);
+      setReportReason('');
+      
+      if (Platform.OS === 'web') {
+        window.alert(
+          isEnglish 
+            ? 'Thank you for your report. We will review it as soon as possible.'
+            : 'ご報告ありがとうございます。できるだけ早く確認いたします。'
+        );
+      } else {
+        Alert.alert(
+          isEnglish ? 'Report Submitted' : '報告完了',
+          isEnglish 
+            ? 'Thank you for your report. We will review it as soon as possible.'
+            : 'ご報告ありがとうございます。できるだけ早く確認いたします。'
+        );
+      }
+    } catch (error) {
+      console.error('Error reporting user:', error);
+      console.error('Error details:', error.code, error.message);
+      if (Platform.OS === 'web') {
+        window.alert(
+          isEnglish ? 'Failed to submit report. Please try again.' : '報告に失敗しました。もう一度お試しください。'
+        );
+      } else {
+        Alert.alert(
+          isEnglish ? 'Error' : 'エラー',
+          isEnglish ? 'Failed to submit report. Please try again.' : '報告に失敗しました。もう一度お試しください。'
+        );
+      }
+    }
+  };
+
+  const handleBlock = async () => {
+    console.log('handleBlock called');
+    console.log('otherUser:', otherUser);
+    console.log('user.uid:', user?.uid);
+    setShowMenu(false);
+    
+    const confirmBlock = Platform.OS === 'web'
+      ? window.confirm(
+          isEnglish 
+            ? `Are you sure you want to block ${otherUser?.displayName}?\n\nThis will delete the chat room.`
+            : `${otherUser?.displayName}さんをブロックしますか？\n\nチャットルームが削除されます。`
+        )
+      : await new Promise((resolve) => {
+          Alert.alert(
+            isEnglish ? 'Block User' : 'ユーザーをブロック',
+            isEnglish 
+              ? `Are you sure you want to block ${otherUser?.displayName}?\n\nThis will delete the chat room.`
+              : `${otherUser?.displayName}さんをブロックしますか？\n\nチャットルームが削除されます。`,
+            [
+              {
+                text: isEnglish ? 'Cancel' : 'キャンセル',
+                style: 'cancel',
+                onPress: () => resolve(false),
+              },
+              {
+                text: isEnglish ? 'Block' : 'ブロック',
+                style: 'destructive',
+                onPress: () => resolve(true),
+              },
+            ]
+          );
+        });
+    
+    if (!confirmBlock) return;
+    
+    try {
+      // 차단 기록 저장
+      const blockRef = doc(db, 'users', user.uid, 'blocked', otherUser.uid);
+      await setDoc(blockRef, {
+        blockedUserId: otherUser.uid,
+        blockedUserName: otherUser.displayName,
+        createdAt: Timestamp.now(),
+      });
+      
+      if (Platform.OS === 'web') {
+        window.alert(
+          isEnglish 
+            ? `You have blocked ${otherUser?.displayName}.`
+            : `${otherUser?.displayName}さんをブロックしました。`
+        );
+        navigation.goBack();
+      } else {
+        Alert.alert(
+          isEnglish ? 'User Blocked' : 'ユーザーをブロックしました',
+          isEnglish 
+            ? `You have blocked ${otherUser?.displayName}.`
+            : `${otherUser?.displayName}さんをブロックしました。`,
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.goBack(),
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error blocking user:', error);
+      if (Platform.OS === 'web') {
+        window.alert(
+          isEnglish ? 'Failed to block user. Please try again.' : 'ブロックに失敗しました。もう一度お試しください。'
+        );
+      } else {
+        Alert.alert(
+          isEnglish ? 'Error' : 'エラー',
+          isEnglish ? 'Failed to block user. Please try again.' : 'ブロックに失敗しました。もう一度お試しください。'
+        );
+      }
     }
   };
 
@@ -191,8 +435,140 @@ export default function ChatScreen({ route, navigation }) {
         <Text style={styles.headerTitle}>
           {otherUser?.displayName || '채팅'} {otherUser?.language === 'en' ? 'EN' : '🇯🇵'}
         </Text>
-        <View style={styles.headerSpacer} />
+        <TouchableOpacity onPress={() => {
+          console.log('Menu button clicked');
+          setShowMenu(true);
+        }} style={styles.menuButton}>
+          <Text style={styles.menuButtonText}>⋮</Text>
+        </TouchableOpacity>
       </View>
+      
+      <Modal
+        visible={showMenu}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowMenu(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMenu(false)}
+        >
+          <View style={styles.menuModal}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
+              <Text style={styles.menuItemText}>
+                {isEnglish ? '🚨 Report User' : '🚨 ユーザーを報告'}
+              </Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity style={styles.menuItem} onPress={handleBlock}>
+              <Text style={[styles.menuItemText, styles.menuItemDanger]}>
+                {isEnglish ? '🚫 Block User' : '🚫 ユーザーをブロック'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Report Modal */}
+      <Modal
+        visible={showReportModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowReportModal(false);
+          setReportReason('');
+        }}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowReportModal(false);
+            setReportReason('');
+          }}
+        >
+          <View style={styles.reportModal} onStartShouldSetResponder={() => true}>
+            <Text style={styles.reportTitle}>
+              {isEnglish ? 'Report User' : 'ユーザーを報告'}
+            </Text>
+            <Text style={styles.reportSubtitle}>
+              {isEnglish 
+                ? `Why are you reporting ${otherUser?.displayName}?`
+                : `${otherUser?.displayName}さんを報告する理由は？`}
+            </Text>
+            
+            <TouchableOpacity 
+              style={[styles.reasonOption, reportReason === 'harassment' && styles.reasonSelected]}
+              onPress={() => setReportReason('harassment')}
+            >
+              <Text style={styles.reasonText}>
+                {isEnglish ? 'Harassment or bullying' : 'ハラスメントまたはいじめ'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.reasonOption, reportReason === 'inappropriate' && styles.reasonSelected]}
+              onPress={() => setReportReason('inappropriate')}
+            >
+              <Text style={styles.reasonText}>
+                {isEnglish ? 'Inappropriate content' : '不適切なコンテンツ'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.reasonOption, reportReason === 'spam' && styles.reasonSelected]}
+              onPress={() => setReportReason('spam')}
+            >
+              <Text style={styles.reasonText}>
+                {isEnglish ? 'Spam or advertising' : 'スパムまたは広告'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.reasonOption, reportReason === 'hate' && styles.reasonSelected]}
+              onPress={() => setReportReason('hate')}
+            >
+              <Text style={styles.reasonText}>
+                {isEnglish ? 'Hate speech' : 'ヘイトスピーチ'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.reasonOption, reportReason === 'other' && styles.reasonSelected]}
+              onPress={() => setReportReason('other')}
+            >
+              <Text style={styles.reasonText}>
+                {isEnglish ? 'Other' : 'その他'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.reportButtonContainer}>
+              <TouchableOpacity 
+                style={styles.reportCancelButton}
+                onPress={() => {
+                  setShowReportModal(false);
+                  setReportReason('');
+                }}
+              >
+                <Text style={styles.reportCancelText}>
+                  {isEnglish ? 'Cancel' : 'キャンセル'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.reportSubmitButton, !reportReason && styles.reportSubmitDisabled]}
+                onPress={submitReport}
+                disabled={!reportReason}
+              >
+                <Text style={styles.reportSubmitText}>
+                  {isEnglish ? 'Submit' : '送信'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
       
       <FlatList
         ref={flatListRef}
@@ -352,6 +728,107 @@ const styles = StyleSheet.create({
   sendButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuModal: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 0,
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  menuItem: {
+    padding: 16,
+  },
+  menuItemDanger: {
+    fontSize: 16,
+    color: '#FF3B30',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  reportModal: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  reportTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#000',
+  },
+  reportSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  reasonOption: {
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    marginBottom: 10,
+    backgroundColor: '#fff',
+  },
+  reasonSelected: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#007AFF',
+    borderWidth: 2,
+  },
+  reasonText: {
+    fontSize: 15,
+    color: '#000',
+  },
+  reportButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 10,
+  },
+  reportCancelButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+  },
+  reportCancelText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '600',
+  },
+  reportSubmitButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+  },
+  reportSubmitDisabled: {
+    backgroundColor: '#ccc',
+  },
+  reportSubmitText: {
+    fontSize: 16,
+    color: '#fff',
     fontWeight: 'bold',
   },
 });

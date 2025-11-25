@@ -26,6 +26,10 @@ export default function LoginScreen({ navigation }) {
   const [displayName, setDisplayName] = useState('');
   const [language, setLanguage] = useState('en');
   const [autoCompleteDisabled, setAutoCompleteDisabled] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  console.log('LoginScreen - isLogin:', isLogin, 'termsAccepted:', termsAccepted);
   // Google Sign-In 관련 상태 제거
   
   const { login, signup } = useAuth();
@@ -78,6 +82,8 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handleAuth = async () => {
+    if (isProcessing) return; // 중복 클릭 방지
+    
     const isEnglish = language === 'en';
     const isKorean = language === 'ko';
     
@@ -92,6 +98,8 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
+    setIsProcessing(true); // 처리 시작
+    
     try {
       if (isLogin) {
         // 로그인 시도 전에 해당 아이디가 존재하는지 확인
@@ -116,6 +124,19 @@ export default function LoginScreen({ navigation }) {
       } else {
         // Google 회원가입 로직 제거
         {
+          // 이용약관 동의 확인
+          if (!termsAccepted) {
+            const errorMsg = isEnglish 
+              ? 'Please agree to the Terms of Service to continue.' 
+              : '利用規約に同意してください。';
+            if (typeof window !== 'undefined' && window.alert) {
+              window.alert(`⚠️ ${isEnglish ? 'Terms Required' : '利用規約必須'}\n\n${errorMsg}`);
+            } else {
+              Alert.alert(`⚠️ ${isEnglish ? 'Terms Required' : '利用規約必須'}`, errorMsg);
+            }
+            return;
+          }
+          
           // 아이디 회원가입
           const validationError = validateInputs(isEnglish);
           if (validationError) {
@@ -126,7 +147,11 @@ export default function LoginScreen({ navigation }) {
             }
             return;
           }
-          await signup(username, password, displayName, language);
+          
+          console.log('Calling signup with:', { username, displayName, language });
+          const result = await signup(username, password, displayName, language);
+          console.log('Signup result:', result);
+          
           await showInterstitial(); // 회원가입 성공 시 전면 광고 노출
           
           // 회원가입 성공 시 안내
@@ -136,6 +161,7 @@ export default function LoginScreen({ navigation }) {
             Alert.alert(`✅ ${isEnglish ? 'Registration Complete' : '会員登録完了'}`, isEnglish ? 'Your registration is complete!' : '登録が完了しました！');
           }
           // 회원가입 성공하면 자동으로 로그인되므로 화면 전환 불필요
+          setIsProcessing(false);
           return;
         }
       }
@@ -147,6 +173,10 @@ export default function LoginScreen({ navigation }) {
       // Firebase Auth 에러 코드 처리
       if (error.code) {
         switch (error.code) {
+          case 'permission-denied':
+          case 'auth/permission-denied':
+            errorMessage = isEnglish ? 'Database permission error. Please contact support.' : 'データベース権限エラーです。サポートにお問い合わせください。';
+            break;
           case 'auth/email-already-in-use':
             errorMessage = isEnglish ? 'This ID is already in use.' : 'このIDはすでに使用されています。';
             break;
@@ -203,6 +233,8 @@ export default function LoginScreen({ navigation }) {
       } else {
         Alert.alert(`❌ ${title}`, errorMessage);
       }
+    } finally {
+      setIsProcessing(false); // 처리 완료 (성공/실패 모두)
     }
   };
 
@@ -326,22 +358,87 @@ export default function LoginScreen({ navigation }) {
           )}
 
           {!isLogin && (
-            <View style={styles.rulesContainer}>
-              <Text style={styles.rulesTitle}>
-                {rulesTitle}
+            <View style={styles.termsContainer}>
+              <Text style={styles.termsTitle}>
+                {language === 'en' ? 'TERMS OF SERVICE' : '利用規約'}
               </Text>
-              <Text style={styles.rulesText}>
-                {nicknameRule}
-              </Text>
-              <Text style={styles.rulesText}>
-                {idRule}
-              </Text>
-              <Text style={styles.rulesText}>
-                {passwordRule}
-              </Text>
-              <Text style={styles.rulesText}>
-                {specialCharsRule}
-              </Text>
+              <ScrollView style={styles.termsScrollView} nestedScrollEnabled={true}>
+                <Text style={styles.termsContent}>
+                  {language === 'en' ? `By using ENJP Bridge, you agree to:
+
+1. Prohibited Content
+• No harassment, hate speech, discrimination
+• No sexually explicit or pornographic content
+• No spam, scams, or fraudulent activities
+• No illegal content or activities
+• No violence, threats, or self-harm content
+
+2. User Conduct
+• Be respectful to all users
+• Use appropriate language
+• Do not impersonate others
+• Do not share personal information publicly
+
+3. Content Moderation
+• Reported content will be reviewed as soon as possible
+• Violators may receive warnings or permanent bans
+• Decisions are made at our discretion
+
+4. Reporting & Blocking
+• You can report inappropriate users/content
+• You can block users at any time
+• Use the in-app report feature
+
+5. Consequences
+• Minor violations: Warning
+• Repeated violations: Permanent ban
+• Serious violations: Immediate ban
+
+Contact: jihun.jo@yahoo.com` 
+                    : `ENJP Bridgeを使用することで、以下に同意します：
+
+1. 禁止コンテンツ
+• ハラスメント、ヘイトスピーチ、差別の禁止
+• 性的に露骨またはポルノコンテンツの禁止
+• スパム、詐欺、不正行為の禁止
+• 違法なコンテンツや活動の禁止
+• 暴力、脅迫、自傷コンテンツの禁止
+
+2. ユーザー行動規範
+• すべてのユーザーに敬意を払う
+• 適切な言葉遣いを使用する
+• 他人になりすましない
+• 個人情報を公開しない
+
+3. コンテンツモデレーション
+• 報告されたコンテンツはできるだけ早く審査されます
+• 違反者は警告または永久禁止される場合があります
+• 決定は当社の裁量で行われます
+
+4. 報告とブロック
+• 不適切なユーザー/コンテンツを報告可能
+• いつでもユーザーをブロック可能
+• アプリ内の報告機能を使用
+
+5. 結果
+• 軽微な違反：警告
+• 繰り返し違反：永久禁止
+• 重大な違反：即時禁止
+
+連絡先：jihun.jo@yahoo.com`}
+                </Text>
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.termsCheckbox}
+                onPress={() => setTermsAccepted(!termsAccepted)}
+              >
+                <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked]}>
+                  {termsAccepted && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={styles.termsAgreeText}>
+                  {language === 'en' ? 'I have read and agree to the Terms of Service' : '利用規約を読んで同意しました'}
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -384,9 +481,36 @@ export default function LoginScreen({ navigation }) {
             </View>
           )}
 
-          <TouchableOpacity style={styles.button} onPress={handleAuth}>
+          {!isLogin && (
+            <View style={styles.rulesContainer}>
+              <Text style={styles.rulesTitle}>
+                {rulesTitle}
+              </Text>
+              <Text style={styles.rulesText}>
+                {nicknameRule}
+              </Text>
+              <Text style={styles.rulesText}>
+                {idRule}
+              </Text>
+              <Text style={styles.rulesText}>
+                {passwordRule}
+              </Text>
+              <Text style={styles.rulesText}>
+                {specialCharsRule}
+              </Text>
+            </View>
+          )}
+
+          <TouchableOpacity 
+            style={[styles.button, isProcessing && styles.buttonDisabled]} 
+            onPress={handleAuth}
+            disabled={isProcessing}
+          >
             <Text style={styles.buttonText}>
-              {loginButtonText}
+              {isProcessing 
+                ? (language === 'en' ? 'Processing...' : '処理中...') 
+                : loginButtonText
+              }
             </Text>
           </TouchableOpacity>
 
@@ -529,12 +653,89 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
   },
+  termsContainer: {
+    marginTop: 10,
+    marginBottom: 15,
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    backgroundColor: '#FFF9E6',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+  },
+  termsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF6B00',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  termsScrollView: {
+    maxHeight: 200,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 8,
+    padding: 10,
+    backgroundColor: '#FFF',
+  },
+  termsContent: {
+    fontSize: 11,
+    color: '#333',
+    lineHeight: 16,
+  },
+  termsCheckbox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  termsAgreeText: {
+    fontSize: 13,
+    color: '#333',
+    flex: 1,
+    marginLeft: 8,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    borderRadius: 4,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#007AFF',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  termsTextContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    flex: 1,
+  },
+  termsText: {
+    fontSize: 14,
+    color: '#333',
+  },
+  termsLink: {
+    fontSize: 14,
+    color: '#007AFF',
+    textDecorationLine: 'underline',
+  },
   button: {
     backgroundColor: '#007AFF',
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 10,
+  },
+  buttonDisabled: {
+    backgroundColor: '#999',
+    opacity: 0.6,
   },
   buttonText: {
     color: '#fff',

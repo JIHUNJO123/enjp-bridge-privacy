@@ -12,9 +12,9 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.enjpbridge.app",
-      "buildNumber": "11",
+      "buildNumber": "13",
       "config": {
         "googleMobileAdsAppId": "ca-app-pub-5837885590326347~8604054372"
       },

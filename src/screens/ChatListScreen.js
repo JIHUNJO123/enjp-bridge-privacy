@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { collection, query, where, onSnapshot, getDoc, updateDoc, serverTimestamp, doc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDoc, getDocs, updateDoc, serverTimestamp, doc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import AdMobBannerComponent from '../components/AdMobBanner';
@@ -29,6 +29,11 @@ export default function ChatListScreen({ navigation }) {
       console.log('ChatList snapshot updated, docs count:', snapshot.docs.length);
       const rooms = [];
       
+      // 차단한 사용자 목록 가져오기
+      const blockedUsersQuery = query(collection(db, 'users', user.uid, 'blocked'));
+      const blockedSnapshot = await getDocs(blockedUsersQuery);
+      const blockedUserIds = blockedSnapshot.docs.map(doc => doc.data().blockedUserId);
+      
       for (const docSnap of snapshot.docs) {
         const roomData = docSnap.data();
         console.log('Room:', docSnap.id, 'Status:', roomData.status, 'RequestedBy:', roomData.requestedBy);
@@ -42,6 +47,12 @@ export default function ChatListScreen({ navigation }) {
         // 상대방 정보 가져오기
         const otherUserId = roomData.participants.find(id => id !== user.uid);
         if (otherUserId) {
+          // 차단한 사용자와의 채팅방은 목록에서 제외
+          if (blockedUserIds.includes(otherUserId)) {
+            console.log('Skipping blocked user:', otherUserId);
+            continue;
+          }
+          
           try {
             const otherUserDoc = await getDoc(doc(db, 'users', otherUserId));
             if (!otherUserDoc.exists()) {
@@ -57,10 +68,14 @@ export default function ChatListScreen({ navigation }) {
               continue;
             }
             
+            // 읽지 않은 메시지 개수 계산
+            const unreadCount = roomData[`unread_${user.uid}`] || 0;
+            
             rooms.push({
               id: docSnap.id,
               ...roomData,
               otherUser,
+              unreadCount,
             });
           } catch (error) {
             console.error('Error fetching other user:', otherUserId, error);
@@ -282,12 +297,16 @@ export default function ChatListScreen({ navigation }) {
               <Text style={styles.chatRoomName}>
                 {item.otherUser?.displayName || (isEnglish ? 'User' : 'ユーザー')}
               </Text>
+              {item.unreadCount > 0 && item.status === 'accepted' && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadText}>N</Text>
+                </View>
+              )}
               {isPending && (
                 <Text style={styles.pendingBadge}>
                   {isRequester 
                     ? (isEnglish ? 'Waiting' : '待機中')
-                    : (isEnglish ? 'New Request' : '新規リクエスト')
-                  }
+                    : (isEnglish ? 'New Request' : '新規リクエスト')}
                 </Text>
               )}
             </View>
@@ -502,13 +521,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     flex: 1,
   },
+  unreadBadge: {
+    backgroundColor: '#FF3B30',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  unreadText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
   pendingBadge: {
     backgroundColor: '#FF9500',
     color: '#fff',
-    fontSize: 11,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    fontSize: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
     fontWeight: 'bold',
     marginLeft: 8,
   },

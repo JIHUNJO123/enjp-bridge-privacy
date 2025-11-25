@@ -40,11 +40,17 @@ export default function UserListScreen({ navigation }) {
     // 실시간 사용자 목록 업데이트
     const q = query(collection(db, 'users'));
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const myLanguage = userProfile?.language || 'en';
       
       console.log('=== UserList Snapshot ===');
       console.log('Total users in DB:', snapshot.docs.length);
+      
+      // 차단한 사용자 목록 가져오기
+      const blockedUsersQuery = query(collection(db, 'users', user.uid, 'blocked'));
+      const blockedSnapshot = await getDocs(blockedUsersQuery);
+      const blockedUserIds = blockedSnapshot.docs.map(doc => doc.data().blockedUserId);
+      console.log('Blocked user IDs:', blockedUserIds);
       
       const allUsers = snapshot.docs.map(doc => ({ 
         id: doc.id, 
@@ -56,17 +62,25 @@ export default function UserListScreen({ navigation }) {
         console.log(`User: ${u.displayName}, deleted: ${u.deleted}, type: ${typeof u.deleted}, language: ${u.language}`);
       });
       
-      const userList = allUsers.filter(u => {
-        const shouldShow = u.id !== user.uid && 
-                          u.language !== myLanguage && 
-                          !u.deleted; // deleted가 truthy한 값이면 제외
-        
-        if (u.displayName === 'jojojo') {
-          console.log(`jojojo filter result: shouldShow=${shouldShow}, deleted=${u.deleted}`);
-        }
-        
-        return shouldShow;
-      });
+      const userList = allUsers
+        .filter(u => {
+          const shouldShow = u.id !== user.uid && 
+                            u.language !== myLanguage && 
+                            !u.deleted && 
+                            !blockedUserIds.includes(u.id); // 차단된 사용자 제외
+          
+          if (u.displayName === 'jojojo') {
+            console.log(`jojojo filter result: shouldShow=${shouldShow}, deleted=${u.deleted}`);
+          }
+          
+          return shouldShow;
+        })
+        .sort((a, b) => {
+          // 최근 활동 순 정렬 (lastActiveAt이 최신인 사람이 위로)
+          const aTime = a.lastActiveAt?.toMillis ? a.lastActiveAt.toMillis() : (a.lastActiveAt || 0);
+          const bTime = b.lastActiveAt?.toMillis ? b.lastActiveAt.toMillis() : (b.lastActiveAt || 0);
+          return bTime - aTime;
+        });
 
       console.log('Filtered users count:', userList.length);
       setUsers(userList);
