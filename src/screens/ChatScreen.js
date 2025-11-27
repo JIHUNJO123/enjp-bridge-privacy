@@ -27,6 +27,7 @@ import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { autoTranslate } from '../services/translation';
 import { sendPushNotification } from '../services/notifications';
+import { validateMessage } from '../services/contentFilter';
 import AdMobBannerComponent from '../components/AdMobBanner';
 
 export default function ChatScreen({ route, navigation }) {
@@ -143,29 +144,18 @@ export default function ChatScreen({ route, navigation }) {
     try {
       const messageText = inputText.trim();
       
-      // 부적절한 콘텐츠 필터링
-      const inappropriateTerms = [
-        // English
-        'fuck', 'shit', 'bitch', 'asshole', 'damn', 'bastard', 'whore', 'slut', 
-        'rape', 'kill yourself', 'suicide', 'nigger', 'faggot', 'retard',
-        'porn', 'sex', 'nude', 'dick', 'pussy', 'cock', 'penis', 'vagina',
-        // Japanese
-        'バカ', 'アホ', 'クソ', '死ね', 'キチガイ', 'ブス', 'デブ',
-        'エロ', 'セックス', 'ちんこ', 'まんこ', 'おっぱい',
-      ];
+      // Validate message for inappropriate content
+      const validation = validateMessage(messageText);
       
-      const lowerCaseText = messageText.toLowerCase();
-      const containsInappropriate = inappropriateTerms.some(term => 
-        lowerCaseText.includes(term.toLowerCase())
-      );
-      
-      if (containsInappropriate) {
-        const isKorean = (userProfile?.language || 'ko') === 'ko';
+      if (!validation.isValid) {
+        const userLang = userProfile?.language || 'en';
+        const isUserEnglish = userLang === 'en';
+        
         Alert.alert(
-          isKorean ? '부적절한 콘텐츠' : '不適切なコンテンツ',
-          isKorean 
-            ? '이 메시지에는 부적절한 콘텐츠가 포함되어 있어 전송할 수 없습니다.' 
-            : 'このメッセージには不適切なコンテンツが含まれているため、送信できません。'
+          isUserEnglish ? 'Inappropriate Content' : '不適切なコンテンツ',
+          isUserEnglish 
+            ? 'This message contains inappropriate language and cannot be sent.' 
+            : 'このメッセージには不適切な言葉が含まれているため、送信できません。'
         );
         setInputText('');
         return;
