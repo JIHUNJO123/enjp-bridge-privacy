@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { collection, query, where, onSnapshot, getDoc, getDocs, updateDoc, serverTimestamp, doc } from 'firebase/firestore';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
+import { collection, query, where, onSnapshot, getDoc, getDocs, updateDoc, serverTimestamp, doc, setDoc, increment } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import AdMobBannerComponent from '../components/AdMobBanner';
@@ -103,7 +103,7 @@ export default function ChatListScreen({ navigation }) {
   const handleLogout = async () => {
     const isEnglish = (userProfile?.language || 'en') === 'en';
     // 웹에서는 window.confirm 사용
-    if (typeof window !== 'undefined' && window.confirm) {
+    if (Platform.OS === 'web') {
       const confirmMessage = `🚪 ${isEnglish ? 'Logout Confirmation' : 'ログアウト確認'}\n\n${isEnglish ? 'Are you sure you want to logout?' : '本当にログアウトしますか？'}`;
       if (window.confirm(confirmMessage)) {
         try {
@@ -147,7 +147,7 @@ export default function ChatListScreen({ navigation }) {
     const isEnglish = (userProfile?.language || 'en') === 'en';
     
     // 웹에서는 window.confirm 사용
-    if (typeof window !== 'undefined' && window.confirm) {
+    if (Platform.OS === 'web') {
       console.log('Using window.confirm for web');
       const confirmMessage = `⚠️ ${isEnglish ? 'Account Deletion Warning' : '会員退会警告'}\n\n${isEnglish ? 'All data will be permanently deleted:\n- Chat history\n- User information\n- All messages\n\nAre you sure you want to delete your account?' : '会員退会時、すべてのデータが永久に削除されます。\n- チャット履歴\n- ユーザー情報\n- すべてのメッセージ\n\n本当に退会しますか？'}`;
       if (window.confirm(confirmMessage)) {
@@ -208,8 +208,13 @@ export default function ChatListScreen({ navigation }) {
       await showInterstitial();
       
       const isEnglish = (userProfile?.language || 'en') === 'en';
-      if (typeof window !== 'undefined' && window.alert) {
+      if (Platform.OS === 'web') {
         window.alert(`✅ ${isEnglish ? 'Request Accepted' : '承認完了'}\n\n${isEnglish ? 'Chat room is now active!\nYou can start chatting now.' : 'チャットルームが有効になりました！\n会話を始められます。'}`);
+      } else {
+        Alert.alert(
+          isEnglish ? '✅ Request Accepted' : '✅ 承認完了',
+          isEnglish ? 'Chat room is now active!\nYou can start chatting now.' : 'チャットルームが有効になりました！\n会話を始められます。'
+        );
       }
       // 승낙 후 채팅방으로 이동
       navigation.navigate('Chat', {
@@ -220,35 +225,119 @@ export default function ChatListScreen({ navigation }) {
       console.error('Error accepting request:', error);
       console.error('Error details:', error.message);
       const isEnglish = (userProfile?.language || 'en') === 'en';
-      if (typeof window !== 'undefined' && window.alert) {
+      if (Platform.OS === 'web') {
         window.alert(`❌ ${isEnglish ? 'Error' : 'エラー発生'}\n\n${error.message}`);
+      } else {
+        Alert.alert(
+          isEnglish ? '❌ Error' : '❌ エラー',
+          error.message
+        );
       }
     }
   };
 
   const handleRejectRequest = async (chatRoomId) => {
     const isEnglish = (userProfile?.language || 'en') === 'en';
-    if (typeof window !== 'undefined' && window.confirm) {
-      const confirmMessage = `⚠️ ${isEnglish ? 'Reject Chat' : 'チャット拒否'}\n\n${isEnglish ? 'Do you want to reject this request?\n(Cannot be undone)' : 'このリクエストを拒否しますか？\n（復元できません）'}`;
-      if (window.confirm(confirmMessage)) {
-        try {
-          console.log('Rejecting request:', chatRoomId);
-          await updateDoc(doc(db, 'chatRooms', chatRoomId), {
-            status: 'rejected',
-            rejectedAt: serverTimestamp(),
+    const confirmMessage = `${isEnglish ? 'Do you want to reject this request?\n(Cannot be undone)' : 'このリクエストを拒否しますか？\n（復元できません）'}`;
+    const confirmTitle = `⚠️ ${isEnglish ? 'Reject Chat' : 'チャット拒否'}`;
+    
+    const executeReject = async () => {
+      try {
+        console.log('Rejecting request:', chatRoomId);
+        
+        // 채팅방 정보 가져오기
+        const chatRoomDoc = await getDoc(doc(db, 'chatRooms', chatRoomId));
+        if (!chatRoomDoc.exists()) {
+          throw new Error('Chat room not found');
+        }
+        
+        const chatRoomData = chatRoomDoc.data();
+        const otherUserId = chatRoomData.participants.find(id => id !== user.uid);
+        
+        // 채팅방 상태를 rejected로 변경
+        await updateDoc(doc(db, 'chatRooms', chatRoomId), {
+          status: 'rejected',
+          rejectedAt: serverTimestamp(),
+        });
+        
+        // 거부 카운트 증가 (사용자 문서의 rejectionCounts 맵에 상대방 ID를 키로 사용)
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+        const userData = userDoc.data();
+        const rejectionCounts = userData?.rejectionCounts || {};
+        const currentCount = rejectionCounts[otherUserId] || 0;
+        const newCount = currentCount + 1;
+        
+        // 거부 카운트 업데이트
+        await updateDoc(userDocRef, {
+          [`rejectionCounts.${otherUserId}`]: newCount
+        });
+        
+        console.log(`Rejection count for ${otherUserId}: ${newCount}`);
+        
+        // 2번째 거부 시 자동 차단
+        if (newCount >= 2) {
+          console.log(`Auto-blocking user ${otherUserId} after 2 rejections`);
+          await setDoc(doc(db, 'users', user.uid, 'blocked', otherUserId), {
+            blockedUserId: otherUserId,
+            blockedAt: serverTimestamp(),
+            reason: 'auto_block_after_2_rejections'
           });
-          console.log('Chat request rejected');
-          if (typeof window !== 'undefined' && window.alert) {
-            window.alert(`✅ ${isEnglish ? 'Request Rejected' : '拒否完了'}\n\n${isEnglish ? 'Chat request has been rejected.' : 'チャットリクエストを拒否しました。'}`);
+          
+          if (Platform.OS === 'web') {
+            window.alert(`🚫 ${isEnglish ? 'User Auto-Blocked' : 'ユーザー自動ブロック'}\n\n${isEnglish ? 'This user has been automatically blocked after 2 rejections.' : 'このユーザーは2回拒否したため自動的にブロックされました。'}`);
+          } else {
+            Alert.alert(
+              isEnglish ? '🚫 User Auto-Blocked' : '🚫 ユーザー自動ブロック',
+              isEnglish ? 'This user has been automatically blocked after 2 rejections.' : 'このユーザーは2回拒否したため自動的にブロックされました。'
+            );
           }
-        } catch (error) {
-          console.error('Error rejecting request:', error);
-          console.error('Error details:', error.message);
-          if (typeof window !== 'undefined' && window.alert) {
-            window.alert(`❌ ${isEnglish ? 'Rejection Failed' : '拒否失敗'}\n\n${error.message}`);
+        } else {
+          if (Platform.OS === 'web') {
+            window.alert(`✅ ${isEnglish ? 'Request Rejected' : '拒否完了'}\n\n${isEnglish ? `Chat request has been rejected. (${newCount}/2)\nOne more rejection will auto-block this user.` : `チャットリクエストを拒否しました。(${newCount}/2)\nもう一度拒否すると自動的にブロックされます。`}`);
+          } else {
+            Alert.alert(
+              isEnglish ? '✅ Request Rejected' : '✅ 拒否完了',
+              isEnglish ? `Chat request has been rejected. (${newCount}/2)\nOne more rejection will auto-block this user.` : `チャットリクエストを拒否しました。(${newCount}/2)\nもう一度拒否すると自動的にブロックされます。`
+            );
           }
         }
+        
+        console.log('Chat request rejected');
+      } catch (error) {
+        console.error('Error rejecting request:', error);
+        console.error('Error details:', error.message);
+        if (Platform.OS === 'web') {
+          window.alert(`❌ ${isEnglish ? 'Rejection Failed' : '拒否失敗'}\n\n${error.message}`);
+        } else {
+          Alert.alert(
+            isEnglish ? '❌ Rejection Failed' : '❌ 拒否失敗',
+            error.message
+          );
+        }
       }
+    };
+    
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${confirmTitle}\n\n${confirmMessage}`)) {
+        await executeReject();
+      }
+    } else {
+      Alert.alert(
+        confirmTitle,
+        confirmMessage,
+        [
+          {
+            text: isEnglish ? 'Cancel' : 'キャンセル',
+            style: 'cancel'
+          },
+          {
+            text: isEnglish ? 'Reject' : '拒否',
+            style: 'destructive',
+            onPress: executeReject
+          }
+        ]
+      );
     }
   };
 
@@ -353,13 +442,13 @@ export default function ChatListScreen({ navigation }) {
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
-    const isKorean = (userProfile?.language || 'ko') === 'ko';
+    const isEnglish = (userProfile?.language || 'en') === 'en';
     
-    if (diff < 60000) return isKorean ? '방금 전' : 'ただいま';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}${isKorean ? '분 전' : '分前'}`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}${isKorean ? '시간 전' : '時間前'}`;
+    if (diff < 60000) return isEnglish ? 'Just now' : 'ただいま';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}${isEnglish ? 'min ago' : '分前'}`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}${isEnglish ? 'h ago' : '時間前'}`;
     
-    return date.toLocaleDateString(isKorean ? 'ko-KR' : 'ja-JP');
+    return date.toLocaleDateString(isEnglish ? 'en-US' : 'ja-JP');
   };
 
   return (
@@ -372,10 +461,8 @@ export default function ChatListScreen({ navigation }) {
           <Text style={styles.userInfo}>
             {userProfile?.displayName} {(userProfile?.language || 'en') === 'en' ? 'EN' : '🇯🇵'}
           </Text>
-          <TouchableOpacity onPress={handleDeleteAccount} style={styles.deleteButton}>
-            <Text style={styles.deleteText}>
-              {(userProfile?.language || 'en') === 'en' ? 'Delete' : '退会'}
-            </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.settingsButton}>
+            <Text style={styles.settingsText}>⚙️</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <Text style={styles.logoutText}>
@@ -453,13 +540,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  deleteButton: {
+  settingsButton: {
     padding: 5,
   },
-  deleteText: {
-    color: '#FF3B30',
-    fontSize: 14,
-    fontWeight: '600',
+  settingsText: {
+    fontSize: 20,
   },
   logoutButton: {
     padding: 5,

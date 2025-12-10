@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TextInput,
   Alert,
+  Platform,
 } from 'react-native';
 import { 
   collection, 
@@ -116,8 +117,10 @@ export default function UserListScreen({ navigation }) {
     // userProfile이 로드되지 않았으면 alert 후 리턴
     if (!userProfile) {
       console.log('userProfile not loaded');
-      if (typeof window !== 'undefined' && window.alert) {
+      if (Platform.OS === 'web') {
         window.alert('Loading user profile, please wait...');
+      } else {
+        Alert.alert('Loading', 'Loading user profile, please wait...');
       }
       return;
     }
@@ -125,8 +128,13 @@ export default function UserListScreen({ navigation }) {
     // 상대방이 탈퇴한 사용자인지 확인
     if (otherUser.deleted) {
       const isEnglish = (userProfile?.language || 'en') === 'en';
-      if (typeof window !== 'undefined' && window.alert) {
+      if (Platform.OS === 'web') {
         window.alert(`❌ ${isEnglish ? 'Error' : 'エラー'}\n\n${isEnglish ? 'This user has been deleted.' : '退会したユーザーです。'}`);
+      } else {
+        Alert.alert(
+          isEnglish ? '❌ Error' : '❌ エラー',
+          isEnglish ? 'This user has been deleted.' : '退会したユーザーです。'
+        );
       }
       return;
     }
@@ -156,23 +164,22 @@ export default function UserListScreen({ navigation }) {
           // 요청자인지 수신자인지 확인
           if (existingRoom.requestedBy === user.uid) {
             console.log('Already requested, showing alert');
-            if (typeof window !== 'undefined' && window.alert) {
+            if (Platform.OS === 'web') {
               window.alert(`⏳ ${isEnglish ? 'Already Requested' : 'すでにリクエスト済み'}\n\n${isEnglish ? 'You have already sent a chat request to this user.\nWaiting for their response.' : 'このユーザーにすでにチャットリクエストを送信しました。\n相手の返事を待っています。'}`);
             } else {
-              // 모바일에서는 Alert 사용
               Alert.alert(
-                isEnglish ? 'Already Requested' : 'すでにリクエスト済み',
+                isEnglish ? '⏳ Already Requested' : '⏳ すでにリクエスト済み',
                 isEnglish ? 'You have already sent a chat request to this user.\nWaiting for their response.' : 'このユーザーにすでにチャットリクエストを送信しました。\n相手の返事を待っています。'
               );
             }
           } else {
             // 상대방이 나에게 요청한 경우 - ChatList로 이동
             console.log('New request from them, showing alert');
-            if (typeof window !== 'undefined' && window.alert) {
+            if (Platform.OS === 'web') {
               window.alert(`💬 ${isEnglish ? 'New Request' : '新しいリクエスト'}\n\n${isEnglish ? 'You have a chat request from this user.\nYou can accept/reject in the chat list.' : 'このユーザーからのチャットリクエストがあります。\nチャットリストで承認/拒否できます。'}`);
             } else {
               Alert.alert(
-                isEnglish ? 'New Request' : '新しいリクエスト',
+                isEnglish ? '💬 New Request' : '💬 新しいリクエスト',
                 isEnglish ? 'You have a chat request from this user.\nYou can accept/reject in the chat list.' : 'このユーザーからのチャットリクエストがあります。\nチャットリストで承認/拒否できます。'
               );
             }
@@ -213,14 +220,24 @@ export default function UserListScreen({ navigation }) {
               lastMessage: '',
             });
 
-            if (typeof window !== 'undefined' && window.alert) {
+            if (Platform.OS === 'web') {
               window.alert(`✅ ${isEnglish ? 'Request Sent' : 'リクエスト完了'}\n\n${isEnglish ? 'Chat request sent!\nYou can start chatting once they accept.' : 'チャットリクエストを送信しました！\n相手が承認すると会話を始められます。'}`);
+            } else {
+              Alert.alert(
+                isEnglish ? '✅ Request Sent' : '✅ リクエスト完了',
+                isEnglish ? 'Chat request sent!\nYou can start chatting once they accept.' : 'チャットリクエストを送信しました！\n相手が承認すると会話を始められます。'
+              );
             }
             navigation.goBack();
           } catch (error) {
             console.error('Error handling rejected room:', error);
-            if (typeof window !== 'undefined' && window.alert) {
+            if (Platform.OS === 'web') {
               window.alert(`❌ ${isEnglish ? 'Error Occurred' : 'エラー発生'}\n\n${error.message}`);
+            } else {
+              Alert.alert(
+                isEnglish ? '❌ Error' : '❌ エラー',
+                error.message
+              );
             }
           }
           return;
@@ -247,16 +264,27 @@ export default function UserListScreen({ navigation }) {
           lastMessage: '',
         });
 
-        if (typeof window !== 'undefined' && window.alert) {
+        if (Platform.OS === 'web') {
           window.alert(isEnglish ? 'Chat request sent!' : 'チャットリクエストを送信しました！');
+        } else {
+          Alert.alert(
+            isEnglish ? '✅ Request Sent' : '✅ リクエスト完了',
+            isEnglish ? 'Chat request sent!\nYou can start chatting once they accept.' : 'チャットリクエストを送信しました！\n相手が承認すると会話を始められます。'
+          );
         }
         navigation.goBack();
       }
     } catch (error) {
       console.error('Error creating chat room:', error);
       console.error('Error details:', error.message);
-      if (typeof window !== 'undefined' && window.alert) {
+      const isEnglish = (userProfile?.language || 'en') === 'en';
+      if (Platform.OS === 'web') {
         window.alert(isEnglish ? `An error occurred: ${error.message}` : `エラーが発生しました: ${error.message}`);
+      } else {
+        Alert.alert(
+          isEnglish ? '❌ Error' : '❌ エラー',
+          isEnglish ? `An error occurred: ${error.message}` : `エラーが発生しました: ${error.message}`
+        );
       }
     }
   };
@@ -305,7 +333,7 @@ export default function UserListScreen({ navigation }) {
       </View>
 
       <Text style={styles.sectionTitle}>
-        {(userProfile?.language || 'en') === 'en' ? 'Japanese Users' : 'English Users'}
+        {(userProfile?.language || 'en') === 'en' ? 'Japanese Users' : '英語ユーザー'}
       </Text>
 
       {filteredUsers.length === 0 ? (

@@ -10,11 +10,15 @@ import {
 
 const TermsScreen = ({ navigation, route }) => {
   const [agreed, setAgreed] = useState(false);
-  const { onAccept } = route.params || {};
+  const { onAccept, language } = route.params || {};
+  const isEnglish = language === 'en';
 
   const handleAccept = () => {
     if (!agreed) {
-      Alert.alert('Error', 'Please agree to the Terms of Service to continue.');
+      Alert.alert(
+        isEnglish ? 'Error' : 'エラー',
+        isEnglish ? 'Please agree to the Terms of Service to continue.' : '続行するには利用規約に同意してください。'
+      );
       return;
     }
     if (onAccept) {

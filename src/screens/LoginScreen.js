@@ -19,7 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import { showInterstitial } from '../components/AdMobInterstitial';
 
 export default function LoginScreen({ navigation }) {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [isLogin, setIsLogin] = useState(true);
@@ -51,13 +51,13 @@ export default function LoginScreen({ navigation }) {
       }
     }
 
-    // 아이디 규칙: 4-16자, 영문/숫자만 허용
-    if (!username) {
-      return isEnglish ? 'Please enter your ID.' : 'IDを入力してください。';
+    // 이메일 규칙: 유효한 이메일 형식
+    if (!email) {
+      return isEnglish ? 'Please enter your email.' : 'メールアドレスを入力してください。';
     }
-    const usernameRegex = /^[a-zA-Z0-9]{4,16}$/;
-    if (!usernameRegex.test(username)) {
-      return isEnglish ? 'ID must be 4-16 characters (letters and numbers only).' : 'IDは4～16文字（英数字のみ）です。';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return isEnglish ? 'Please enter a valid email address.' : '有効なメールアドレスを入力してください。';
     }
 
     // 비밀번호 규칙: 6-20자, 영문+숫자 조합
@@ -85,15 +85,14 @@ export default function LoginScreen({ navigation }) {
     if (isProcessing) return; // 중복 클릭 방지
     
     const isEnglish = language === 'en';
-    const isKorean = language === 'ko';
     
     // 입력 규칙 검증
     const validationError = validateInputs(isEnglish);
     if (validationError) {
-      if (typeof window !== 'undefined' && window.alert) {
+      if (Platform.OS === 'web') {
         window.alert(`⚠️ ${isEnglish ? 'Input Error' : '入力エラー'}\n\n${validationError}`);
       } else {
-        Alert.alert(`⚠️ ${isKorean ? '입력 오류' : '入力エラー'}`, validationError);
+        Alert.alert(isEnglish ? '⚠️ Input Error' : '⚠️ 入力エラー', validationError);
       }
       return;
     }
@@ -102,24 +101,8 @@ export default function LoginScreen({ navigation }) {
     
     try {
       if (isLogin) {
-        // 로그인 시도 전에 해당 아이디가 존재하는지 확인
-        const userQuery = query(
-          collection(db, 'users'),
-          where('username', '==', username)
-        );
-        const userSnapshot = await getDocs(userQuery);
-        
-        if (userSnapshot.empty) {
-          const errorMsg = isEnglish ? 'ID not found. Please check your ID.' : 'IDが見つかりません。IDを確認してください。';
-          if (typeof window !== 'undefined' && window.alert) {
-            window.alert(`⚠️ ${isEnglish ? 'Login Error' : 'ログインエラー'}\n\n${errorMsg}`);
-          } else {
-            Alert.alert(`⚠️ ${isEnglish ? 'Login Error' : 'ログインエラー'}`, errorMsg);
-          }
-          return;
-        }
-        // 아이디와 비밀번호로 로그인 (선택한 언어 전달)
-        await login(username, password, language);
+        // 이메일과 비밀번호로 로그인 (선택한 언어 전달)
+        await login(email, password, language);
         await showInterstitial(); // 로그인 성공 시 전면 광고 노출
       } else {
         // Google 회원가입 로직 제거
@@ -129,10 +112,10 @@ export default function LoginScreen({ navigation }) {
             const errorMsg = isEnglish 
               ? 'Please agree to the Terms of Service to continue.' 
               : '利用規約に同意してください。';
-            if (typeof window !== 'undefined' && window.alert) {
+            if (Platform.OS === 'web') {
               window.alert(`⚠️ ${isEnglish ? 'Terms Required' : '利用規約必須'}\n\n${errorMsg}`);
             } else {
-              Alert.alert(`⚠️ ${isEnglish ? 'Terms Required' : '利用規約必須'}`, errorMsg);
+              Alert.alert(isEnglish ? '⚠️ Terms Required' : '⚠️ 利用規約必須', errorMsg);
             }
             return;
           }
@@ -140,25 +123,25 @@ export default function LoginScreen({ navigation }) {
           // 아이디 회원가입
           const validationError = validateInputs(isEnglish);
           if (validationError) {
-            if (typeof window !== 'undefined' && window.alert) {
+            if (Platform.OS === 'web') {
               window.alert(`⚠️ ${isEnglish ? 'Input Error' : '入力エラー'}\n\n${validationError}`);
             } else {
-              Alert.alert(`⚠️ ${isKorean ? '입력 오류' : '入力エラー'}`, validationError);
+              Alert.alert(isEnglish ? '⚠️ Input Error' : '⚠️ 入力エラー', validationError);
             }
             return;
           }
           
-          console.log('Calling signup with:', { username, displayName, language });
-          const result = await signup(username, password, displayName, language);
+          console.log('Calling signup with:', { email, displayName, language });
+          const result = await signup(email, password, displayName, language);
           console.log('Signup result:', result);
           
           await showInterstitial(); // 회원가입 성공 시 전면 광고 노출
           
           // 회원가입 성공 시 안내
-          if (typeof window !== 'undefined' && window.alert) {
+          if (Platform.OS === 'web') {
             window.alert(`✅ ${isEnglish ? 'Registration Complete' : '会員登録完了'}\n\n${isEnglish ? 'Your registration is complete!' : '登録が完了しました！'}`);
           } else {
-            Alert.alert(`✅ ${isEnglish ? 'Registration Complete' : '会員登録完了'}`, isEnglish ? 'Your registration is complete!' : '登録が完了しました！');
+            Alert.alert(isEnglish ? '✅ Registration Complete' : '✅ 会員登録完了', isEnglish ? 'Your registration is complete!' : '登録が完了しました！');
           }
           // 회원가입 성공하면 자동으로 로그인되므로 화면 전환 불필요
           setIsProcessing(false);
@@ -167,8 +150,7 @@ export default function LoginScreen({ navigation }) {
       }
     } catch (error) {
       const isEnglish = language === 'en';
-      const isKorean = language === 'ko';
-      let errorMessage = error.message || (isKorean ? '오류가 발생했습니다.' : 'エラーが発生しました。');
+      let errorMessage = error.message || (isEnglish ? 'An error occurred.' : 'エラーが発生しました。');
 
       // Firebase Auth 에러 코드 처리
       if (error.code) {
@@ -187,11 +169,11 @@ export default function LoginScreen({ navigation }) {
             errorMessage = isEnglish ? 'Password must be at least 6 characters.' : 'パスワードは6文字以上である必要があります。';
             break;
           case 'auth/user-not-found':
-            errorMessage = isEnglish ? 'ID not found. Please check your ID.' : 'IDが見つかりません。IDを確認してください。';
+            errorMessage = isEnglish ? 'Email not found. Please check your email.' : 'メールアドレスが見つかりません。メールアドレスを確認してください。';
             break;
           case 'auth/wrong-password':
           case 'auth/invalid-credential':
-            errorMessage = isEnglish ? 'Incorrect ID or password.' : 'IDまたはパスワードが間違っています。';
+            errorMessage = isEnglish ? 'Incorrect email or password.' : 'メールアドレスまたはパスワードが間違っています。';
             break;
           case 'auth/too-many-requests':
             errorMessage = isEnglish ? 'Too many failed attempts. Please try again later.' : '試行回数が多すぎます。しばらくしてから再度お試しください。';
@@ -228,7 +210,7 @@ export default function LoginScreen({ navigation }) {
         ? (isEnglish ? 'Login Failed' : 'ログイン失敗')
         : (isEnglish ? 'Registration Failed' : '会員登録失敗');
 
-      if (typeof window !== 'undefined' && window.alert) {
+      if (Platform.OS === 'web') {
         window.alert(`❌ ${title}\n\n${errorMessage}`);
       } else {
         Alert.alert(`❌ ${title}`, errorMessage);
@@ -243,7 +225,7 @@ export default function LoginScreen({ navigation }) {
   const subtitle = language === 'en' ? 'Language Exchange Chat' : '言語交換チャット';
   const description = language === 'en' ? 'Connect with the world through real-time translation' : 'リアルタイム翻訳で世界とつながろう';
   const nicknamePlaceholder = language === 'en' ? 'Nickname (2-10 characters)' : 'ニックネーム (2～10文字)';
-  const idPlaceholder = language === 'en' ? 'ID (4-16 letters/numbers)' : 'ID (4～16文字 英数字)';
+  const emailPlaceholder = language === 'en' ? 'Email' : 'メールアドレス';
   const passwordPlaceholder = language === 'en' ? 'Password (6-20 chars, letters+numbers)' : 'パスワード (6～20文字, 英数字)';
   const confirmPasswordPlaceholder = language === 'en' ? 'Confirm Password' : 'パスワード確認';
   const selectLanguageLabel = language === 'en' ? 'Select Language:' : '言語選択:';
@@ -255,9 +237,9 @@ export default function LoginScreen({ navigation }) {
   const nicknameRule = language === 'en' 
     ? '• Nickname: 2-10 characters (English/Japanese/numbers)'
     : '• ニックネーム: 2～10文字 (英文/日本語/数字)';
-  const idRule = language === 'en' 
-    ? '• ID: 4-16 characters (letters and numbers only)'
-    : '• ID: 4～16文字（英数字のみ）';
+  const emailRule = language === 'en' 
+    ? '• Email: Valid email address required'
+    : '• メール: 有効なメールアドレスが必要';
   const passwordRule = language === 'en' 
     ? '• Password: 6-20 characters (letters+numbers required)'
     : '• パスワード: 6～20文字 (英文+数字必須)';
@@ -321,21 +303,16 @@ export default function LoginScreen({ navigation }) {
           
           <TextInput
             style={styles.input}
-            placeholder={idPlaceholder}
-            value={username}
-            onChangeText={(text) => {
-              // @ 기호가 포함되어 있으면 제거
-              const cleanText = text.replace(/@.*/g, '');
-              setUsername(cleanText);
-            }}
+            placeholder={emailPlaceholder}
+            value={email}
+            onChangeText={setEmail}
             autoCapitalize="none"
-            autoComplete="off"
+            autoComplete="email"
             autoCorrect={false}
-            textContentType="none"
-            keyboardType="default"
-            importantForAutofill="no"
+            textContentType="emailAddress"
+            keyboardType="email-address"
+            importantForAutofill="yes"
             spellCheck={false}
-            maxLength={16}
           />
           
           <TextInput
@@ -366,64 +343,94 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.termsContent}>
                   {language === 'en' ? `By using ENJP Bridge, you agree to:
 
-1. Prohibited Content
+1. Age Requirement
+• You must be at least 13 years old to use this app
+• Users under 13 are not permitted
+
+2. Prohibited Content
 • No harassment, hate speech, discrimination
 • No sexually explicit or pornographic content
 • No spam, scams, or fraudulent activities
 • No illegal content or activities
 • No violence, threats, or self-harm content
 
-2. User Conduct
+3. User Conduct
 • Be respectful to all users
 • Use appropriate language
 • Do not impersonate others
 • Do not share personal information publicly
 
-3. Content Moderation
+4. Content Moderation
 • Reported content will be reviewed as soon as possible
 • Violators may receive warnings or permanent bans
 • Decisions are made at our discretion
 
-4. Reporting & Blocking
+5. Reporting & Blocking
 • You can report inappropriate users/content
 • You can block users at any time
 • Use the in-app report feature
 
-5. Consequences
+6. Consequences
 • Minor violations: Warning
 • Repeated violations: Permanent ban
 • Serious violations: Immediate ban
 
+7. Your Rights & Privacy
+• You can delete your account anytime in Settings
+• All your data will be permanently deleted upon account deletion
+• See our Privacy Policy for data collection details
+• You can withdraw consent by deleting your account
+
+8. Service Changes
+• We may modify or discontinue services at any time
+• We reserve the right to update these terms
+• Continued use means acceptance of changes
+
 Contact: jihun.jo@yahoo.com` 
                     : `ENJP Bridgeを使用することで、以下に同意します：
 
-1. 禁止コンテンツ
+1. 年齢要件
+• このアプリを使用するには13歳以上である必要があります
+• 13歳未満のユーザーは許可されません
+
+2. 禁止コンテンツ
 • ハラスメント、ヘイトスピーチ、差別の禁止
 • 性的に露骨またはポルノコンテンツの禁止
 • スパム、詐欺、不正行為の禁止
 • 違法なコンテンツや活動の禁止
 • 暴力、脅迫、自傷コンテンツの禁止
 
-2. ユーザー行動規範
+3. ユーザー行動規範
 • すべてのユーザーに敬意を払う
 • 適切な言葉遣いを使用する
 • 他人になりすましない
 • 個人情報を公開しない
 
-3. コンテンツモデレーション
+4. コンテンツモデレーション
 • 報告されたコンテンツはできるだけ早く審査されます
 • 違反者は警告または永久禁止される場合があります
 • 決定は当社の裁量で行われます
 
-4. 報告とブロック
+5. 報告とブロック
 • 不適切なユーザー/コンテンツを報告可能
 • いつでもユーザーをブロック可能
 • アプリ内の報告機能を使用
 
-5. 結果
+6. 結果
 • 軽微な違反：警告
 • 繰り返し違反：永久禁止
 • 重大な違反：即時禁止
+
+7. お客様の権利とプライバシー
+• 設定からいつでもアカウント削除可能
+• アカウント削除時にすべてのデータが完全に削除されます
+• データ収集の詳細はプライバシーポリシーをご覧ください
+• アカウント削除により同意を撤回できます
+
+8. サービスの変更
+• いつでもサービスを変更または終了する場合があります
+• これらの規約を更新する権利を留保します
+• 継続使用は変更の受諾を意味します
 
 連絡先：jihun.jo@yahoo.com`}
                 </Text>
@@ -490,7 +497,7 @@ Contact: jihun.jo@yahoo.com`
                 {nicknameRule}
               </Text>
               <Text style={styles.rulesText}>
-                {idRule}
+                {emailRule}
               </Text>
               <Text style={styles.rulesText}>
                 {passwordRule}

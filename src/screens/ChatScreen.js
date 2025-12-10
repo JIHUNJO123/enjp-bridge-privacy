@@ -59,7 +59,7 @@ export default function ChatScreen({ route, navigation }) {
           // 차단된 상태면 채팅 목록으로 돌아가기
           navigation.goBack();
           
-          if (typeof window !== 'undefined' && window.alert) {
+          if (Platform.OS === 'web') {
             window.alert(isEnglish 
               ? 'This conversation is no longer available.' 
               : 'この会話は利用できません。');
@@ -190,10 +190,15 @@ export default function ChatScreen({ route, navigation }) {
       if (otherUser?.pushToken && 
           otherUser.id !== user.uid && 
           otherUser.pushToken !== userProfile?.pushToken) {
-        const isKorean = (userProfile?.language || 'ko') === 'ko';
+        // 알림을 받는 사람(otherUser)의 언어에 맞춤
+        const isReceiverEnglish = (otherUser?.language || 'en') === 'en';
+        const notificationTitle = isReceiverEnglish 
+          ? `New message from ${userProfile.displayName}`
+          : `${userProfile.displayName}さんからメッセージ`;
+        
         await sendPushNotification(
           otherUser.pushToken,
-          `${userProfile.displayName}${isKorean ? '님의 메시지' : 'さんからメッセージ'}`,
+          notificationTitle,
           messageText,
           { chatRoomId, senderId: user.uid }
         );
@@ -388,7 +393,7 @@ export default function ChatScreen({ route, navigation }) {
           
           {showTranslation && translatedMessages[item.id] !== item.text && (
             <View style={styles.translationContainer}>
-              <Text style={styles.translationLabel}>번역:</Text>
+              <Text style={styles.translationLabel}>{isEnglish ? 'Translation:' : '翻訳:'}</Text>
               <Text style={styles.translationText}>
                 {translatedMessages[item.id]}
               </Text>
@@ -406,7 +411,7 @@ export default function ChatScreen({ route, navigation }) {
   const formatTime = (timestamp) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('ko-KR', {
+    return date.toLocaleTimeString(isEnglish ? 'en-US' : 'ja-JP', {
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -423,7 +428,7 @@ export default function ChatScreen({ route, navigation }) {
           <Text style={styles.backButtonText}>{isEnglish ? "← Back" : "← 戻る"}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {otherUser?.displayName || '채팅'} {otherUser?.language === 'en' ? 'EN' : '🇯🇵'}
+          {otherUser?.displayName || (isEnglish ? 'Chat' : 'チャット')} {otherUser?.language === 'en' ? 'EN' : '🇯🇵'}
         </Text>
         <TouchableOpacity onPress={() => {
           console.log('Menu button clicked');
@@ -608,7 +613,10 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : 15,
   },
   backButton: {
-    padding: 5,
+    minWidth: 60,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 5,
   },
   backButtonText: {
     fontSize: 16,
@@ -619,6 +627,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
+  },
+  menuButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  menuButtonText: {
+    fontSize: 24,
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
   headerSpacer: {
     width: 50,
@@ -730,7 +750,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 0,
-    minWidth: 200,
+    minWidth: 240,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -738,10 +758,17 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   menuItem: {
-    padding: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  menuItemText: {
+    fontSize: 17,
+    color: '#000',
   },
   menuItemDanger: {
-    fontSize: 16,
+    fontSize: 17,
     color: '#FF3B30',
   },
   menuDivider: {

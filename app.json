@@ -1,56 +1,65 @@
 {
-  "expo": {
-    "name": "ENJP Bridge",
-    "slug": "korea-japan-chat",
-    "version": "1.0.1",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
-    "ios": {
-      "supportsTablet": false,
-      "bundleIdentifier": "com.enjpbridge.app",
-      "config": {
-        "googleMobileAdsAppId": "ca-app-pub-5837885590326347~8604054372"
-      },
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "package": "com.enjpbridge.app",
-      "versionCode": 12,
-      "edgeToEdgeEnabled": true,
-      "config": {
-        "googleMobileAdsAppId": "ca-app-pub-5837885590326347~9917136043"
-      }
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "89afd171-ce67-4895-a859-e6cdd018c1d5"
-      }
-    },
-    "owner": "jihunjo",
-    "plugins": [
-      [
-        "react-native-google-mobile-ads",
-        {
-          "androidAppId": "ca-app-pub-5837885590326347~9917136043",
-          "iosAppId": "ca-app-pub-5837885590326347~8604054372",
-          "delayAppMeasurementInit": false
-        }
-      ]
-    ]
-  }
+    "expo":  {
+                 "name":  "ENJP Bridge",
+                 "slug":  "korea-japan-chat",
+                 "version":  "1.0.6",
+                 "orientation":  "portrait",
+                 "icon":  "./assets/icon.png",
+                 "userInterfaceStyle":  "light",
+                 "splash":  {
+                                "image":  "./assets/splash.png",
+                                "resizeMode":  "contain",
+                                "backgroundColor":  "#ffffff"
+                            },
+                 "ios":  {
+                             "supportsTablet":  false,
+                             "bundleIdentifier":  "com.enjpbridge.app",
+                             "buildNumber":  "10",
+                             "config":  {
+                                            "googleMobileAdsAppId":  "ca-app-pub-5837885590326347~8604054372"
+                                        },
+                             "infoPlist":  {
+                                               "ITSAppUsesNonExemptEncryption":  false,
+                                               "NSUserTrackingUsageDescription":  "This identifier will be used to deliver personalized ads to you.",
+                                               "SKAdNetworkItems":  [
+                                                                        {
+                                                                            "SKAdNetworkIdentifier":  "cstr6suwn9.skadnetwork"
+                                                                        }
+                                                                    ]
+                                           },
+                             "usesIcloudStorage":  false
+                         },
+                 "android":  {
+                                 "adaptiveIcon":  {
+                                                      "foregroundImage":  "./assets/adaptive-icon.png",
+                                                      "backgroundColor":  "#ffffff"
+                                                  },
+                                 "package":  "com.enjpbridge.app",
+                                 "versionCode":  16,
+                                 "edgeToEdgeEnabled":  true,
+                                 "config":  {
+                                                "googleMobileAdsAppId":  "ca-app-pub-5837885590326347~9917136043"
+                                            }
+                             },
+                 "web":  {
+                             "favicon":  "./assets/favicon.png"
+                         },
+                 "extra":  {
+                               "eas":  {
+                                           "projectId":  "89afd171-ce67-4895-a859-e6cdd018c1d5"
+                                       }
+                           },
+                 "owner":  "jihunjo",
+                 "plugins":  [
+                                 [
+                                     "react-native-google-mobile-ads",
+                                     {
+                                         "androidAppId":  "ca-app-pub-5837885590326347~9917136043",
+                                         "iosAppId":  "ca-app-pub-5837885590326347~8604054372",
+                                         "delayAppMeasurementInit":  false
+                                     }
+                                 ]
+                             ],
+                 "newArchEnabled":  true
+             }
 }
